@@ -63,7 +63,8 @@ The table below outlines the exact files consumed and produced by each modular s
 | [**04 Refinement**](#4-timeline-refinement--multi-format-serialization) | `Diarization_Outputs/` (e.g., `MarauliKhurad1_raw_timeline.json`) | `Diarization_Outputs/MarauliKhurad1/` (e.g., CSV, JSON, TXT, RTTM, MD reports) |
 | [**05 Audio Splitting**](#5-audio-splitting--speaker-isolation) | `Cleaned_Audio/` + `Diarization_Outputs/MarauliKhurad1/` | `Isolated_Speaker_Audio/MarauliKhurad1/` (e.g., speaker-concatenated tracks & individual turns) |
 | [**06a Transcription (Whisper-LoRA)**](#6a-speaker-wise-transcription-local-whisper-lora--insights-extraction-gemini-api) | `Cleaned_Audio/` + `Diarization_Outputs/MarauliKhurad1/` | `Diarization_Transcripts/MarauliKhurad1/` (Whisper-LoRA transcripts & Gemini reports) |
-| [**06b Transcription (Gemma-3n)**](#6b-speaker-wise-transcription--insights-extraction-local-gemma-3n) | `Cleaned_Audio/` + `Diarization_Outputs/MarauliKhurad1/` | `Diarization_Transcripts/MarauliKhurad1/` (Gemma-3n transcripts & local Gemma reports) |
+| [**06b Transcription (Gemma-3n)**](#6b-speaker-wise-transcription-local-gemma-3n) | `Cleaned_Audio/` + `Diarization_Outputs/MarauliKhurad1/` | `Diarization_Transcripts/MarauliKhurad1/` (Gemma-3n transcripts) |
+| [**07b Report Generation (Gemma-3n)**](#7b-report-generation--pdf-serialization-local-gemma-3n-e4b) | `Diarization_Transcripts/MarauliKhurad1/` | `Diarization_Transcripts/MarauliKhurad1/` (Gemma-3n Markdown & PDF reports) |
 
 ---
 
@@ -208,30 +209,46 @@ Ensure the subdirectories below exist (the notebooks will attempt to create them
 
 ---
 
-### 6b. Speaker-Wise Transcription & Insights Extraction (Local Gemma-3n)
-* **Notebook File**: [06b_Gemma_Transcription_and_Insights.ipynb](06b_Gemma_Transcription_and_Insights.ipynb)
-* **Goal**: Transcribe speaker segments locally on GPU using the multimodal Gemma 3n E4B model, and run the same local model to generate Devanagari transliteration and insights, creating a completely offline pipeline.
+### 6b. Speaker-Wise Transcription (Local Gemma-3n)
+* **Notebook File**: [06b_Gemma_Transcription.ipynb](06b_Gemma_Transcription.ipynb)
+* **Goal**: Transcribe speaker segments locally on GPU using the multimodal Gemma 3n E4B model.
 * **Form Parameters**:
   * `cleaned_audio_path`: Path to `Cleaned_Audio/[Filename]_cleaned.wav`.
   * `refined_timeline_json_path`: Path to the refined JSON timeline.
-  * `transcription_output_folder`: Folder path where transcripts and reports are saved.
+  * `transcription_output_folder`: Folder path where transcripts are saved.
   * `gemma_model_id`: The Gemma model version (defaults to `google/gemma-3n-e4b-it`).
-  * `run_insights`: If `True`, runs the local Gemma insights generation block.
 * **Underlying Logic & Libraries**:
   * **Local Gemma-3n STT**:
-    1. Loads the Gemma 3n model onto the GPU in bfloat16 precision.
+    1. Loads the Gemma 3n model onto the GPU in bfloat16/bfloat32 precision.
     2. Slices speaker audio turns from the cleaned WAV file.
     3. Passes the audio array slice directly to Gemma's multimodal processor, applying a specific ASR chat template instruction.
     4. Decodes output token IDs using `processor.decode` to produce Gurmukhi Punjabi transcripts.
-  * **Local Gemma-3n Insights**:
-    1. Feeds the Gurmukhi transcript into the same local Gemma 3n model.
-    2. Applies a prompt instructing it to translate/transliterate Gurmukhi to Devanagari and extract insights/knowledge tables.
-    3. Saves the report as `_devanagari_insights.md`.
 * **Input**: `Cleaned_Audio/[Filename]_cleaned.wav`, `Diarization_Outputs/[Filename]/[Filename]_timeline.json`, and Hugging Face token access.
 * **Output**: Saved inside `Diarization_Transcripts/[Filename]/`:
   - Chronological transcripts (`_diarized_transcript.txt` / `.md` / `.json`)
   - Speaker segregated texts (`_[Speaker]_transcript.txt`)
-  - Devanagari transliteration and insights report (`_devanagari_insights.md`)
+
+---
+
+### 7b. Report Generation & PDF Serialization (Local Gemma-3n-e4b)
+* **Notebook File**: [07b_Report_Generation.ipynb](07b_Report_Generation.ipynb)
+* **Goal**: Generate Devanagari transliteration and a highly detailed structured report from the transcribed text locally on GPU using the multimodal Gemma 3n E4B model, and serialize it to a PDF.
+* **Form Parameters**:
+  * `input_transcript_folder`: Google Drive path where the Step 6b output folder is located.
+  * `report_output_folder`: Google Drive path to save the generated reports.
+  * `gemma_model_id`: The Gemma model version (defaults to `google/gemma-3n-e4b-it`).
+* **Underlying Logic & Libraries**:
+  * **Local Gemma-3n Report Generation**:
+    1. Loads the Gurmukhi transcript JSON from Google Drive.
+    2. Prompts the Gemma 3n E4B model to translate/transliterate Gurmukhi to Devanagari and extract 22 specific metadata and summary fields.
+    3. Saves the report as Markdown (`_gemma_report.md`).
+  * **PDF Serialization**:
+    1. Converts the Markdown report into a professional PDF format using the `markdown-pdf` library.
+    2. Saves the PDF file as `{audio_name_only}_gemma_report.pdf` directly to the Google Drive folder.
+* **Input**: `Diarization_Transcripts/[Filename]/[Filename]_diarized_transcript.json` and Hugging Face token access.
+* **Output**: Saved inside `Diarization_Transcripts/[Filename]/`:
+  - Devanagari translation & insights Markdown report (`_gemma_report.md`)
+  - Serialized premium PDF report (`_gemma_report.pdf`)
 
 ---
 
