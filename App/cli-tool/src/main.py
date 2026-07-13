@@ -10,6 +10,7 @@ from datetime import datetime
 from config import settings
 from src.core.database import db_manager
 from src.modules.zoho import initialize_zoho_client, ZohoBatchService
+from src.modules.local import LocalBatchService
 from src.pipeline import pipeline
 from src.core.utils import log
 
@@ -57,6 +58,25 @@ async def cmd_process_folder_merge(args):
     finally:
         await db_manager.disconnect()
 
+async def cmd_process_local_folder(args):
+    """Scan, Merge, and Process a local folder"""
+    await db_manager.connect()
+    try:
+        service = LocalBatchService(Path("data/uploads/local_processing"), pipeline)
+        
+        meta_overrides = {
+            "village": args.village,
+            "block": args.block,
+            "district": args.district,
+            "interaction_type": "consolidated_meeting"
+        }
+        # Remove None values
+        meta_overrides = {k: v for k, v in meta_overrides.items() if v}
+        
+        await service.process_folder_merge(Path(args.folder_path), meta_overrides, args.language)
+    finally:
+        await db_manager.disconnect()
+
 async def cmd_sync_folder(args):
     """Sync a folder normally (individual files)"""
     await db_manager.connect()
@@ -99,6 +119,14 @@ def main():
     p_merge.add_argument("--district", help="District name")
     p_merge.add_argument("--language", default="punjabi")
     
+    # Process Local Folder
+    p_local = subparsers.add_parser("process-folder", help="Merge and Process all audios in a local folder")
+    p_local.add_argument("folder_path", help="Local Folder Path")
+    p_local.add_argument("--village", help="Village name for report")
+    p_local.add_argument("--block", help="Block name")
+    p_local.add_argument("--district", help="District name")
+    p_local.add_argument("--language", default="punjabi")
+    
     # Sync
     p_sync = subparsers.add_parser("sync", help="Regular sync of Zoho folder (file by file)")
     p_sync.add_argument("folder_id", help="Zoho Folder ID")
@@ -114,6 +142,8 @@ def main():
         asyncio.run(cmd_process_file(args))
     elif args.command == "process-merge":
         asyncio.run(cmd_process_folder_merge(args))
+    elif args.command == "process-folder":
+        asyncio.run(cmd_process_local_folder(args))
     elif args.command == "sync":
         asyncio.run(cmd_sync_folder(args))
     elif args.command == "recursive-merge":

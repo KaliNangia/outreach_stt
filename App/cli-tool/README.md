@@ -148,6 +148,20 @@ python -m src.main process-merge <FOLDER_ID> \
 python -m src.main process-merge abc123xyz456 --village "Railon Kalan"
 ```
 
+#### Merge & Process Local Folder
+Scan all recordings from a local folder, merge them, and generate one comprehensive report:
+
+```bash
+python -m src.main process-folder /path/to/local/folder \
+  --village "Garhi Farid" \
+  --district "Rupnagar"
+```
+
+**Example:**
+```bash
+python -m src.main process-folder ./data/local_meetings/input_audios --village "Railon Kalan"
+```
+
 #### Sync Individual Files from Zoho
 Process each file in a Zoho folder individually (separate reports):
 
