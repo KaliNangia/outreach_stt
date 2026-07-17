@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACE Executive Health Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header animate-fade-in delay-1">
+            <div>
+                <h1>ACE Executive Health Dashboard</h1>
+                <p>Upload your automated QA testing log sheet to generate real-time metrics.</p>
+            </div>
+        </header>
+
+        <section class="upload-section animate-fade-in delay-2">
+            <div class="glass-card">
+                <form action="/upload" method="POST" enctype="multipart/form-data" class="upload-form">
+                    <input type="file" name="csvFile" accept=".csv" required class="file-input"/>
+                    <button type="submit" class="btn-primary">Parse Logs</button>
+                </form>
+                <% if (error) { %>
+                    <div class="alert alert-error"><%= error %></div>
+                <% } %>
+            </div>
+        </section>
+
+        <% if (rows) { %>
+            <div class="alert alert-success animate-fade-in delay-3">
+                ✓ Successfully loaded <span id="rowCountLabel"></span> active validation entries.
+            </div>
+
+            <section class="filters-grid animate-fade-in delay-3">
+                <div class="filter-group">
+                    <label>Date Range</label>
+                    <select id="filterDateRange">
+                        <option value="">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="7">Last 7 Days</option>
+                        <option value="30">Last 30 Days</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                </div>
+                <div class="filter-group" id="customDateGroup" style="display: none;">
+                    <label>Custom Date Range</label>
+                    <div class="date-inputs-wrapper" style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="date" id="filterFromDate" style="width: 100%; padding: 0.75rem 0.5rem; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0, 0, 0, 0.2); color: var(--text-main); outline: none; font-family: inherit; font-size: 0.90rem;"/>
+                        <span style="color: var(--text-muted);">-</span>
+                        <input type="date" id="filterToDate" style="width: 100%; padding: 0.75rem 0.5rem; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0, 0, 0, 0.2); color: var(--text-main); outline: none; font-family: inherit; font-size: 0.90rem;"/>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label>Build / Version</label>
+                    <select id="filterBuild"><option value="">All</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>Sprint / Cycle</label>
+                    <select id="filterSprint"><option value="">All</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>Channel</label>
+                    <select id="filterChannel"><option value="">All</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>Language</label>
+                    <select id="filterLanguage"><option value="">All</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>Category</label>
+                    <select id="filterCategory"><option value="">All</option></select>
+                </div>
+            </section>
+
+            <!-- LAYER 1: Overall Quality -->
+            <h2 class="section-title animate-fade-in delay-3">1. Overall Quality KPIs</h2>
+            <section class="kpi-grid-mini animate-fade-in delay-3">
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Test Volume</div>
+                    <div class="kpi-value" id="valTotalQ">0</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Overall Pass Rate</div>
+                    <div class="kpi-value" id="valOverallPass">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Correct Answer Rate</div>
+                    <div class="kpi-value" id="valCorrectAns">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Scientific Accuracy</div>
+                    <div class="kpi-value" id="valSciAcc">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">SLA Compliance</div>
+                    <div class="kpi-value" id="valSLA">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Translation Error</div>
+                    <div class="kpi-value" id="valTransErr">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Avg Response Time</div>
+                    <div class="kpi-value" id="valAvgResp">0m</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Critical Defects</div>
+                    <div class="kpi-value" id="valCritDefect">0</div>
+                </div>
+            </section>
+
+            <h2 class="section-title animate-fade-in delay-3 mt-4">Executive Scorecard</h2>
+            <section class="kpi-row-1 animate-fade-in delay-3">
+                <div class="glass-card kpi-card trust">
+                    <div class="kpi-title">Trust Score</div>
+                    <div class="kpi-value" id="valTrust">0%</div>
+                    <div class="kpi-desc">ACE Trust Score</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="barTrust" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="glass-card kpi-card farmer">
+                    <div class="kpi-title">Farmer Experience</div>
+                    <div class="kpi-value" id="valFarmer">0%</div>
+                    <div class="kpi-desc">Experience Score</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="barFarmer" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="glass-card kpi-card critical">
+                    <div class="kpi-title">Critical Failures Today</div>
+                    <div class="kpi-value" id="valCritical">0</div>
+                    <div class="kpi-desc">Blocker / Severity Incidents</div>
+                </div>
+
+                <div class="glass-card kpi-card release">
+                    <div class="kpi-title">Release Health</div>
+                    <div class="kpi-value" id="valRelease">0%</div>
+                    <div class="kpi-desc">System Environment Stability</div>
+                </div>
+            </section>
+
+            <section class="kpi-row-2 animate-fade-in delay-3">
+                <div class="glass-card kpi-card-small">
+                    <div class="kpi-title">Biggest Bottleneck</div>
+                    <div class="kpi-value" id="valBottleneck" style="color: var(--accent-warning);">Loading...</div>
+                </div>
+
+                <div class="glass-card kpi-card-small">
+                    <div class="kpi-title">Weakest Module</div>
+                    <div class="kpi-value" id="valWeakest" style="color: var(--accent-tertiary);">Loading...</div>
+                </div>
+
+                <div class="glass-card kpi-card-small">
+                    <div class="kpi-title">Trend</div>
+                    <div class="kpi-trend" id="valTrend">
+                        <span id="iconTrend"></span> Calculating...
+                    </div>
+                </div>
+
+                <div class="glass-card kpi-card-small">
+                    <div class="kpi-title">Open Critical Defects</div>
+                    <div class="kpi-value" id="valOpenDefects" style="color: var(--accent-danger);">0</div>
+                </div>
+            </section>
+
+            <!-- LAYER 2: Time Period Analysis Charts -->
+            <h2 class="section-title animate-fade-in delay-3 mt-4">2. Time Period Analysis</h2>
+            <section class="charts-grid animate-fade-in delay-3">
+                <div class="glass-card chart-container">
+                    <h3 class="chart-title">Pass Rate vs Time</h3>
+                    <canvas id="chartPassRate"></canvas>
+                </div>
+                <div class="glass-card chart-container">
+                    <h3 class="chart-title">Accuracy vs Time</h3>
+                    <canvas id="chartAccuracy"></canvas>
+                </div>
+                <div class="glass-card chart-container">
+                    <h3 class="chart-title">Response Time vs Time</h3>
+                    <canvas id="chartResponseTime"></canvas>
+                </div>
+                <div class="glass-card chart-container">
+                    <h3 class="chart-title">Defects vs Time</h3>
+                    <canvas id="chartDefects"></canvas>
+                </div>
+            </section>
+
+            <!-- LAYER 5: Component / Failure Analysis -->
+            <h2 class="section-title animate-fade-in delay-3 mt-4">5. Component Failure Analysis</h2>
+            <section class="failure-analysis-grid animate-fade-in delay-3">
+                <div class="glass-card">
+                    <div class="failure-item">
+                        <div class="failure-label">Question Quality</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failQuestion" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailQuestion">0%</div>
+                    </div>
+                    <div class="failure-item">
+                        <div class="failure-label">Answer Quality</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failAnswer" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailAnswer">0%</div>
+                    </div>
+                    <div class="failure-item">
+                        <div class="failure-label">Workflow (SLA)</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failWorkflow" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailWorkflow">0%</div>
+                    </div>
+                    <div class="failure-item">
+                        <div class="failure-label">Translation</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failTranslation" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailTranslation">0%</div>
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="failure-item">
+                        <div class="failure-label">Expert Displayed</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failExpert" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailExpert">0%</div>
+                    </div>
+                    <div class="failure-item">
+                        <div class="failure-label">Sources Provided</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failSources" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailSources">0%</div>
+                    </div>
+                    <div class="failure-item">
+                        <div class="failure-label">Notification</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failNotification" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailNotification">0%</div>
+                    </div>
+                    <div class="failure-item">
+                        <div class="failure-label">Voice / Platform</div>
+                        <div class="failure-bar-bg"><div class="failure-bar" id="failVoice" style="width:0%"></div></div>
+                        <div class="failure-val" id="valFailVoice">0%</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Final Summarized Section -->
+            <h2 class="section-title animate-fade-in delay-3 mt-4">Final Summarized</h2>
+            <section class="kpi-grid-mini animate-fade-in delay-3" style="margin-bottom: 2rem;">
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Translation Failure</div>
+                    <div class="kpi-value" id="valFinalTrans" style="color: var(--accent-danger);">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Notification Failure</div>
+                    <div class="kpi-value" id="valFinalNotif" style="color: var(--accent-danger);">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Answer Accuracy</div>
+                    <div class="kpi-value" id="valFinalAnswer">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Q-ID Consistency</div>
+                    <div class="kpi-value" id="valFinalQID">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Voice Issues</div>
+                    <div class="kpi-value" id="valFinalVoice" style="color: var(--accent-danger);">0%</div>
+                </div>
+                <div class="glass-card kpi-card-mini">
+                    <div class="kpi-title">Database Issues</div>
+                    <div class="kpi-value" id="valFinalDB" style="color: var(--accent-danger);">0%</div>
+                </div>
+            </section>
+
+            <script>
+                // Inject the raw CSV data into a global variable securely
+                const rawRows = <%- JSON.stringify(rows) %>;
+            </script>
+            <script src="/dashboard.js"></script>
+        <% } %>
+    </div>
+</body>
+</html>
