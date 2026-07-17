@@ -21,12 +21,7 @@ A Node.js and Express web application that allows users to upload automated QA t
 
 ## Installation & Setup
 
-1. **Clone the repository** (if not already done) and navigate into the project directory:
-   ```bash
-   cd Dashboard
-   ```
-
-2. **Install dependencies:**
+1. **Install dependencies:**
    ```bash
    npm install
    ```
