@@ -47,3 +47,5 @@ A Node.js and Express web application that allows users to upload automated QA t
 2. Click **Choose File** and select a valid QA testing log sheet in `.csv` format.
 3. Click **Parse Logs** to upload the data.
 4. Once the data is processed, use the filter dropdowns at the top of the dashboard to narrow down the dataset and observe how the real-time charts and KPIs react.
+# outreach_stt
+Repo for test log data dashboard 
