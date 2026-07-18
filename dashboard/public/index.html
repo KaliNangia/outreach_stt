@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACE Executive Health Dashboard</title>
+  <!-- Google Fonts Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Minimal Header -->
+  <header class="dashboard-header">
+    <div class="header-logo">
+      <h1>ACE Executive Health Dashboard</h1>
+      <p class="subtitle">Minimalist Quality Assurance Performance Analytics</p>
+    </div>
+    <div class="header-actions">
+      <!-- Toggle Filter for Clean Data -->
+      <div class="toggle-container">
+        <label class="switch">
+          <input type="checkbox" id="toggle-clean-data">
+          <span class="slider round"></span>
+        </label>
+        <span class="toggle-label">Exclude Failures</span>
+      </div>
+      <!-- Minimalist File Upload Form -->
+      <label for="csv-upload" class="upload-btn">
+        <span>Upload CSV</span>
+        <input type="file" id="csv-upload" accept=".csv" />
+      </label>
+      <span id="upload-status" class="status-msg"></span>
+    </div>
+  </header>
+
+  <!-- Filter Controls Section -->
+  <section class="filters-section">
+    <div class="filters-grid">
+      <!-- Date Filter -->
+      <div class="filter-item">
+        <label>Date Range</label>
+        <select id="filter-date-range">
+          <option value="all">All Dates</option>
+          <option value="today">Today</option>
+          <option value="7days">Last 7 Days</option>
+          <option value="30days">Last 30 Days</option>
+          <option value="custom">Custom Range</option>
+        </select>
+        <div id="custom-date-pickers" class="custom-dates" style="display:none;">
+          <input type="date" id="date-start" />
+          <input type="date" id="date-end" />
+        </div>
+      </div>
+      <!-- Build Version -->
+      <div class="filter-item">
+        <label>Build / Version</label>
+        <select id="filter-build">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Sprint / Cycle -->
+      <div class="filter-item">
+        <label>Sprint / Cycle</label>
+        <select id="filter-sprint">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Channel Tested -->
+      <div class="filter-item">
+        <label>Channel Tested</label>
+        <select id="filter-channel">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Language Tested -->
+      <div class="filter-item">
+        <label>Language Tested</label>
+        <select id="filter-language">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Question Category -->
+      <div class="filter-item">
+        <label>Question Category (Module)</label>
+        <select id="filter-category">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Tester Name -->
+      <div class="filter-item">
+        <label>Tester Name</label>
+        <select id="filter-tester">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Type of Question -->
+      <div class="filter-item">
+        <label>Type of Question</label>
+        <select id="filter-type">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Overall Test Status -->
+      <div class="filter-item">
+        <label>Overall Test Status</label>
+        <select id="filter-status">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <!-- Defect Severity -->
+      <div class="filter-item">
+        <label>Defect Severity</label>
+        <select id="filter-severity">
+          <option value="all">All</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- Row 1: Executive KPI Cards -->
+  <main class="dashboard-content">
+    <div class="kpi-grid">
+      <!-- Card 1: ACE Trust Score -->
+      <div class="kpi-card">
+        <h3 class="card-title">ACE Trust Score</h3>
+        <div class="kpi-value-container">
+          <span id="kpi-trust-score" class="kpi-value">--%</span>
+          <span id="kpi-trust-trend" class="trend-indicator"></span>
+        </div>
+        <ul class="score-breakdown">
+          <li><span>Sci Accuracy (40%):</span> <strong id="val-sci-acc">--%</strong></li>
+          <li><span>Domain Accuracy (20%):</span> <strong id="val-dom-acc">--%</strong></li>
+          <li><span>Source Links (10%):</span> <strong id="val-source-links">--%</strong></li>
+          <li><span>Expert Matching (10%):</span> <strong id="val-expert-match">--%</strong></li>
+          <li><span>Translation Quality (10%):</span> <strong id="val-trans-trust">--%</strong></li>
+          <li><span>Channel Consistency (10%):</span> <strong id="val-channel-match">--%</strong></li>
+        </ul>
+      </div>
+
+      <!-- Card 2: Farmer Experience Score -->
+      <div class="kpi-card">
+        <h3 class="card-title">Farmer Experience Score</h3>
+        <div class="kpi-value-container">
+          <span id="kpi-experience-score" class="kpi-value">--%</span>
+          <span id="kpi-experience-trend" class="trend-indicator"></span>
+        </div>
+        <ul class="score-breakdown">
+          <li><span>Response Speed (30%):</span> <strong id="val-speed-acc">--%</strong></li>
+          <li><span>SLA Compliance (20%):</span> <strong id="val-sla-compliance">--%</strong></li>
+          <li><span>Voice Mechanics (20%):</span> <strong id="val-voice-mechanics">--%</strong></li>
+          <li><span>Translation Quality (15%):</span> <strong id="val-trans-experience">--%</strong></li>
+          <li><span>Notification Exp (15%):</span> <strong id="val-notif-experience">--%</strong></li>
+        </ul>
+      </div>
+
+      <!-- Card 3: Critical Failures Today -->
+      <div class="kpi-card">
+        <h3 class="card-title">Critical Failures Today</h3>
+        <div class="kpi-value-container">
+          <span id="kpi-critical-failures" class="kpi-value">--</span>
+        </div>
+        <ul class="score-breakdown">
+          <li><span>Incorrect Answers:</span> <strong id="val-failed-answers">--</strong></li>
+          <li><span>Not Saved in DB (Q/A):</span> <strong id="val-failed-db">--</strong></li>
+          <li><span>Notification Failure:</span> <strong id="val-failed-notif">--</strong></li>
+          <li><span>Critical Severity Bugs:</span> <strong id="val-failed-bugs">--</strong></li>
+        </ul>
+      </div>
+
+      <!-- Card 4: Release Health -->
+      <div class="kpi-card">
+        <h3 class="card-title">Release Health</h3>
+        <div class="kpi-value-container">
+          <span id="kpi-release-health" class="kpi-value">--%</span>
+        </div>
+        <div class="health-bar-container">
+          <div id="health-progress-bar" class="health-progress" style="width: 0%"></div>
+        </div>
+        <ul class="score-breakdown">
+          <li><span>Overall Pass Rate:</span> <strong id="val-pass-rate">--%</strong></li>
+          <li><span>Critical Defects:</span> <strong id="val-critical-count">--</strong></li>
+          <li><span>Data Integrity Failures:</span> <strong id="val-data-failures">--</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Row 2: Diagnostics Section -->
+    <div class="diagnostics-grid">
+      <!-- Col 1: Biggest Bottleneck -->
+      <div class="diag-card">
+        <h3 class="card-title">Biggest Bottleneck</h3>
+        <div class="bottleneck-summary">
+          <span id="bottleneck-stage" class="stage-name">--</span>
+          <span id="bottleneck-time" class="stage-time">--</span>
+        </div>
+        <!-- Simple Horizontal Bar Chart for Stage Durations -->
+        <div class="tat-bars" id="tat-bars-container">
+          <!-- Bars will be generated dynamically by JS -->
+        </div>
+      </div>
+
+      <!-- Col 2: Weakest Module -->
+      <div class="diag-card">
+        <h3 class="card-title">Weakest Module</h3>
+        <div class="weakest-summary">
+          <span id="weakest-module-name" class="module-name">--</span>
+          <span id="weakest-module-accuracy" class="module-accuracy">--% Accuracy</span>
+        </div>
+        <p class="diag-description">This topic category shows the lowest average scientific accuracy across tested queries.</p>
+      </div>
+
+      <!-- Col 3: Open Critical Defects -->
+      <div class="diag-card">
+        <h3 class="card-title">Open Critical Defects</h3>
+        <div class="tickets-container">
+          <ul id="critical-tickets-list" class="tickets-list">
+            <!-- Tickets will be generated dynamically by JS -->
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Historical Trend Charts -->
+    <div class="charts-section">
+      <div class="chart-container">
+        <h3>ACE Trust & Farmer Experience Trends</h3>
+        <canvas id="chart-scores"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>Average Response Time (minutes)</h3>
+        <canvas id="chart-latency"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>Defect Count by Sprint / Cycle</h3>
+        <canvas id="chart-defects"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <!-- JS Controller -->
+  <script src="app.js"></script>
+</body>
+</html>

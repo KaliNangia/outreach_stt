@@ -1,0 +1,474 @@
+/* CSS variables for a premium, minimalist light theme */
+:root {
+  --bg-primary: #f8fafc;
+  --bg-card: #ffffff;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  
+  --accent-color: #4f46e5;
+  --accent-light: #e0e7ff;
+  --success-color: #10b981;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-weight: 300; /* thin/light clean body typography */
+  line-height: 1.5;
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* Typography Headings */
+h1, h2, h3, h4, .kpi-value, .stage-name, .module-name {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700; /* bold geometric metrics */
+  letter-spacing: -0.02em;
+}
+
+/* Minimal Header */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  font-size: 1.8rem;
+  color: var(--text-primary);
+}
+
+.dashboard-header .subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+/* Minimalist File Upload */
+.upload-btn {
+  display: inline-block;
+  padding: 0.6rem 1.2rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--text-primary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-btn:hover {
+  background-color: var(--text-primary);
+  color: var(--bg-card);
+}
+
+.upload-btn input[type="file"] {
+  display: none;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.toggle-label {
+  font-size: 0.85rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+/* Switch container */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-color);
+  transition: .3s;
+  border-radius: 22px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+input:checked + .slider {
+  background-color: var(--accent-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+.status-msg {
+  font-size: 0.8rem;
+  margin-left: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* Filters Section */
+.filters-section {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.2rem;
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.filter-item label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.filter-item select, .filter-item input {
+  padding: 0.5rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  font-size: 0.85rem;
+  outline: none;
+  border-radius: 0;
+  transition: border-color 0.2s ease;
+}
+
+.filter-item select:focus, .filter-item input:focus {
+  border-color: var(--accent-color);
+}
+
+.custom-dates {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+/* KPI Summary Cards Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kpi-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+.kpi-value-container {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+
+.kpi-value {
+  font-size: 2.8rem;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.trend-indicator {
+  font-size: 0.9rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+}
+
+.trend-up {
+  color: var(--success-color);
+}
+
+.trend-down {
+  color: var(--error-color);
+}
+
+.score-breakdown {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border-light);
+  padding-top: 1rem;
+  margin-top: auto;
+}
+
+.score-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.score-breakdown li strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Progress bar for Release Health */
+.health-bar-container {
+  height: 6px;
+  background-color: var(--border-light);
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.health-progress {
+  height: 100%;
+  background-color: var(--success-color);
+  transition: width 0.4s ease;
+}
+
+/* Diagnostics Row */
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 992px) {
+  .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.diag-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+}
+
+.bottleneck-summary, .weakest-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.stage-name, .module-name {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stage-time, .module-accuracy {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.module-accuracy {
+  color: var(--error-color);
+}
+
+.diag-description {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Horizontal Bar chart for Turnaround Times */
+.tat-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.tat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tat-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.tat-bar-bg {
+  height: 4px;
+  background-color: var(--border-light);
+  width: 100%;
+}
+
+.tat-bar-fill {
+  height: 100%;
+  background-color: var(--accent-color);
+  transition: width 0.4s ease;
+}
+
+/* Tickets List for Defects */
+.tickets-container {
+  max-height: 160px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-light);
+  padding-top: 0.5rem;
+}
+
+.tickets-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.tickets-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.ticket-link {
+  color: var(--accent-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ticket-link:hover {
+  text-decoration: underline;
+}
+
+.ticket-severity {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.sev-critical {
+  background-color: #ffe4e6;
+  color: #be123c;
+}
+
+.sev-high {
+  background-color: #ffedd5;
+  color: #c2410c;
+}
+
+/* Charts Section */
+.charts-section {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+  .charts-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-container {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+}
+
+.chart-container h3 {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 1.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chart-container canvas {
+  width: 100% !important;
+  height: 220px !important;
+}
