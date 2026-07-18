@@ -3,7 +3,7 @@ Central configuration module for Report Generation Pipeline
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 
 class Settings(BaseSettings):
@@ -39,9 +39,18 @@ class Settings(BaseSettings):
     whisper_device: Literal["cpu", "cuda"] = "cpu"
     whisper_compute_type: str = "float16"
     
+    # Advanced Model Settings
+    whisper_base_model: str = "openai/whisper-large-v3-turbo"
+    whisper_lora_repo: str = "Garden2006/whisper-large-v3-turbo-gurmukhi-lora"
+    gemma_model_id: str = "google/gemma-3n-e4b-it"
+    
     # Translation Settings
     translation_model: str = "ai4bharat/indictrans2-en-indic-1B"
     translation_device: Literal["cpu", "cuda"] = "cpu"
+    
+    # Diarization Settings
+    hf_token: Optional[str] = None
+    diarization_model: str = "pyannote/speaker-diarization-community-1"
     
     # LLM Settings
     gemini_model: str = "gemini-2.5-flash"

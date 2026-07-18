@@ -122,7 +122,7 @@ class ZohoBatchService:
         self.processor = processor
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
-    async def sync_folder_files(self, root_folder_id: str, default_meta: Optional[Dict] = None):
+    async def sync_folder_files(self, root_folder_id: str, default_meta: Optional[Dict] = None, model: str = "efficient"):
         """Standard sync: File by File"""
         log.info(f"Syncing {root_folder_id}")
         for file_info in self.client.scan_for_media_files(root_folder_id):
@@ -134,11 +134,11 @@ class ZohoBatchService:
                 
                 local_path = self.work_dir / f"{file_info['id']}_{file_info['name']}"
                 self.client.download_file(file_info['id'], local_path)
-                await self.processor.process_interaction(local_path, meta)
+                await self.processor.process_interaction(local_path, meta, model=model)
             except Exception as e:
                 log.error(f"Sync Process failed {file_info['name']}: {e}")
 
-    async def process_recursive_merge(self, root_folder_id: str, default_lang: str):
+    async def process_recursive_merge(self, root_folder_id: str, default_lang: str, model: str = "efficient"):
         """Deep scan, group by folder, merge, and process"""
         log.info(f"Deep scanning root folder {root_folder_id}")
         all_media = self.client.scan_for_media_files(root_folder_id)
@@ -155,9 +155,9 @@ class ZohoBatchService:
         log.info(f"Found {len(grouped)} unique subfolders with audio")
         
         for folder_path, files in grouped.items():
-            await self._process_file_group(folder_path, files, default_lang)
+            await self._process_file_group(folder_path, files, default_lang, model=model)
 
-    async def process_single_folder_merge(self, folder_id: str, meta_overrides: Dict, default_lang: str):
+    async def process_single_folder_merge(self, folder_id: str, meta_overrides: Dict, default_lang: str, model: str = "efficient"):
         """Merge all files in a specific folder"""
         log.info(f"Scanning folder {folder_id}")
         files = self.client.scan_for_media_files(folder_id)
@@ -169,9 +169,9 @@ class ZohoBatchService:
 
         # Treat as one group named "Merged Data" or from args
         folder_name = meta_overrides.get("village", "Merged_Folder")
-        await self._process_file_group(folder_name, audio_files, default_lang, meta_overrides)
+        await self._process_file_group(folder_name, audio_files, default_lang, meta_overrides, model=model)
 
-    async def _process_file_group(self, folder_identifier: str, files: List[Dict], lang: str, meta_overrides: Optional[Dict] = None):
+    async def _process_file_group(self, folder_identifier: str, files: List[Dict], lang: str, meta_overrides: Optional[Dict] = None, model: str = "efficient"):
         log.info(f"Processing Group: {folder_identifier} ({len(files)} files)")
         
         # 1. Download
@@ -209,7 +209,7 @@ class ZohoBatchService:
             
         # 4. Process
         try:
-            iid = await self.processor.process_interaction(merged_path, meta)
+            iid = await self.processor.process_interaction(merged_path, meta, model=model)
             print(f"✅ Processed [{folder_identifier}]: {iid}")
         except Exception as e:
             log.error(f"Failed to process {folder_identifier}: {e}")

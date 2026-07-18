@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mic Recorder — Coordinator</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --panel-2: #1f2330;
+    --border: #2a2e3a;
+    --text: #e7e9ee;
+    --muted: #8d93a3;
+    --accent: #5b8cff;
+    --accent-2: #ff6b6b;
+    --good: #3ddc97;
+    --warn: #ffb648;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .row { display: flex; gap: 12px; align-items: center; }
+  input[type=text] {
+    flex: 1;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.88; }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: var(--accent-2); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #sessionPanel { display: none; }
+
+  .session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .session-title { font-size: 18px; font-weight: 600; }
+  .session-code {
+    font-family: 'SF Mono', Monaco, monospace;
+    background: var(--panel-2);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .status-open { background: rgba(141,147,163,0.15); color: var(--muted); }
+  .status-counting_in { background: rgba(255,182,72,0.15); color: var(--warn); }
+  .status-recording { background: rgba(255,107,107,0.15); color: var(--accent-2); }
+  .status-counting_out { background: rgba(255,182,72,0.15); color: var(--warn); }
+  .status-stopped { background: rgba(61,220,151,0.15); color: var(--good); }
+  .status-failed { background: rgba(255,107,107,0.15); color: var(--accent-2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .pulse { animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1;} 50% {opacity:0.3;} }
+
+  .countdown-config {
+    display: flex; align-items: center; gap: 10px; margin-top: 18px;
+    font-size: 14px; color: var(--muted);
+  }
+  .countdown-config input[type=number] {
+    width: 70px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .countdown-config label { color: var(--text); font-weight: 600; }
+
+  #coordCountdownOverlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15,17,23,0.97);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  #coordCountdownOverlay.phase-stopping #coordCountdownNumber { color: var(--accent-2); }
+  #coordCountdownNumber {
+    font-size: 130px; font-weight: 700; color: var(--good); line-height: 1;
+  }
+  #coordCountdownLabel { font-size: 18px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  #coordCountdownSub { color: var(--muted); font-size: 14px; margin-top: 16px; }
+
+  .trim-pending { color: var(--muted); }
+  .trim-trimming { color: var(--warn); }
+  .trim-done { color: var(--good); }
+  .trim-error { color: var(--accent-2); }
+  .download-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .download-link:hover { text-decoration: underline; }
+
+  .join-info {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  #qrImg { width: 140px; height: 140px; border-radius: 10px; background: white; padding: 8px; }
+  .join-url {
+    font-family: monospace;
+    font-size: 13px;
+    background: var(--panel-2);
+    padding: 10px 14px;
+    border-radius: 8px;
+    word-break: break-all;
+    color: var(--accent);
+  }
+
+  .controls { display: flex; gap: 10px; margin-top: 20px; }
+
+  .mic-list { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .mic-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .mic-name { font-weight: 600; font-size: 15px; }
+  .mic-meta { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .mic-status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .connected { color: var(--good); }
+  .disconnected { color: var(--accent-2); }
+  .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 30px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ Mic Recorder — Coordinator</h1>
+  <div class="sub">Create a session, share the link/QR with participants, and record each mic to its own file.</div>
+
+  <div class="card" id="createPanel">
+    <div style="margin-bottom: 16px; display: flex; gap: 20px; font-size: 15px;">
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="setupMode" value="wireless" checked /> 📶 Wireless Setup (Mobile Relays)
+      </label>
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="setupMode" value="wired" /> 🔌 Wired Setup (Local Microphones)
+      </label>
+    </div>
+    <div class="row">
+      <input type="text" id="sessionNameInput" placeholder="Session name (e.g. Group Discussion - Topic A)" />
+      <button id="createBtn">Create Session</button>
+    </div>
+  </div>
+
+  <div class="card" id="sessionPanel">
+    <div class="session-header">
+      <div>
+        <div class="session-title" id="sessionTitle"></div>
+        <span class="session-code" id="sessionCode"></span>
+      </div>
+      <span class="status-pill" id="statusPill"></span>
+    </div>
+
+    <div class="join-info" id="joinInfoSection">
+      <img id="qrImg" src="" alt="QR code" />
+      <div>
+        <div class="sub" style="margin-bottom:6px;">Participants join by scanning this QR or opening:</div>
+        <div class="join-url" id="joinUrl"></div>
+      </div>
+    </div>
+
+    <!-- Wired Microphones selection, visible only in wired mode -->
+    <div id="wiredMicPanel" style="display:none; margin-top:20px; border-top: 1px solid var(--border); padding-top:16px;">
+      <div style="font-weight: 600; margin-bottom: 8px; font-size: 15px;">🔌 Select Microphones for Wired Recording:</div>
+      <div id="wiredMicList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+        <div class="empty-state">Loading microphones...</div>
+      </div>
+      <button id="detectMicsBtn" class="secondary" style="padding: 8px 14px; font-size: 13.5px;">🔄 Refresh Mic List</button>
+    </div>
+
+    <div class="countdown-config">
+      <label for="countdownInput">Countdown (sec):</label>
+      <input type="number" id="countdownInput" value="3" min="1" max="30" />
+      <span id="countdownConfigNote">Recording starts/stops this many seconds after you click — that window gets trimmed off automatically.</span>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">● Start Recording</button>
+      <button id="stopBtn" class="danger" disabled>■ End Discussion</button>
+      <button id="newSessionBtn" class="secondary">+ New Session</button>
+    </div>
+
+    <div class="mic-list" id="micList">
+      <div class="empty-state">No participants connected yet — share the link above.</div>
+    </div>
+  </div>
+
+  <div class="card" id="cliPanel">
+    <h2 style="font-size: 18px; margin: 0 0 12px; font-weight: 600;">🛠️ CLI Pipeline Runner (Manual Import)</h2>
+    <div class="sub" style="margin-bottom: 16px;">Directly run the transcription and reporting pipeline on a local audio/video file or folder path.</div>
+    
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 2; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">Local File or Folder Path</label>
+          <input type="text" id="cliPathInput" placeholder="e.g. C:/Outreach/recordings/meeting_01.mp3" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;" />
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">Village</label>
+          <input type="text" id="cliVillageInput" placeholder="e.g. Railon Kalan" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;" />
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">District</label>
+          <input type="text" id="cliDistrictInput" placeholder="e.g. Rupnagar" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;" />
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">Block</label>
+          <input type="text" id="cliBlockInput" placeholder="e.g. Chamkaur Sahib" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;" />
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">Reporting Manager / Coordinator</label>
+          <input type="text" id="cliCoordinatorInput" placeholder="e.g. Rajesh Kumar" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;" />
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">Language</label>
+          <select id="cliLanguageSelect" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;">
+            <option value="punjabi">Punjabi</option>
+            <option value="hindi">Hindi</option>
+            <option value="english">English</option>
+          </select>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label style="font-size: 13px; color: var(--muted); text-align: left;">Model</label>
+          <select id="cliModelSelect" style="width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: 15px;">
+            <option value="efficient">Efficient (Whisper LoRA)</option>
+            <option value="performance">Performance (Gemma 3n)</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="runCliBtn" style="margin-top: 8px;">🚀 Run CLI Pipeline</button>
+    </div>
+
+    <div id="cliLogContainer" style="display: none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight: 600;">📊 Pipeline Execution Log:</span>
+        <span id="cliStatusBadge" style="font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 4px; background: rgba(141,147,163,0.15); color: var(--muted);">IDLE</span>
+      </div>
+      <pre id="cliLogOutput" style="background: #090a0f; border: 1px solid var(--border); padding: 12px; border-radius: 8px; height: 250px; overflow-y: scroll; font-family: 'SF Mono', Monaco, monospace; font-size: 12.5px; color: #a9b2c3; white-space: pre-wrap; margin: 0; text-align: left;"></pre>
+    </div>
+  </div>
+</div>
+
+<div id="coordCountdownOverlay">
+  <div id="coordCountdownLabel">Recording starts in</div>
+  <div id="coordCountdownNumber">3</div>
+  <div id="coordCountdownSub">All connected mics will start recording at the same instant.</div>
+</div>
+
+<script>
+const socket = io();
+let currentSession = null;
+
+const sessionNameInput = document.getElementById('sessionNameInput');
+const createBtn = document.getElementById('createBtn');
+const createPanel = document.getElementById('createPanel');
+const sessionPanel = document.getElementById('sessionPanel');
+const sessionTitle = document.getElementById('sessionTitle');
+const sessionCodeEl = document.getElementById('sessionCode');
+const statusPill = document.getElementById('statusPill');
+const qrImg = document.getElementById('qrImg');
+const joinUrl = document.getElementById('joinUrl');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const newSessionBtn = document.getElementById('newSessionBtn');
+const micList = document.getElementById('micList');
+const countdownInput = document.getElementById('countdownInput');
+const coordCountdownOverlay = document.getElementById('coordCountdownOverlay');
+const coordCountdownLabel = document.getElementById('coordCountdownLabel');
+const coordCountdownNumber = document.getElementById('coordCountdownNumber');
+const coordCountdownSub = document.getElementById('coordCountdownSub');
+
+let coordCountdownTimer = null;
+let currentSessionMode = 'wireless';
+
+// Generate coordinator device ID
+let deviceId = localStorage.getItem('coordinator_deviceId');
+if (!deviceId) {
+  deviceId = 'c-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  localStorage.setItem('coordinator_deviceId', deviceId);
+}
+
+let wiredMics = [];
+let wiredStreams = [];
+let wiredRecorders = [];
+let wiredBackupChunks = {};
+
+async function initWiredMics() {
+  const wiredMicList = document.getElementById('wiredMicList');
+  wiredMicList.innerHTML = '<div style="color:var(--muted); font-size: 14px; text-align: center; padding: 20px 0;">Requesting audio permissions...</div>';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => track.stop()); // release immediately
+    await refreshWiredMics();
+  } catch (err) {
+    wiredMicList.innerHTML = `<div class="error" style="color:var(--accent-2); font-size:14px; text-align:center;">Permission denied or no microphones found: ${err.message}</div>`;
+  }
+}
+
+async function refreshWiredMics() {
+  const wiredMicList = document.getElementById('wiredMicList');
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  wiredMics = devices.filter(d => d.kind === 'audioinput');
+
+  if (wiredMics.length === 0) {
+    wiredMicList.innerHTML = '<div class="empty-state">No microphones detected. Make sure they are plugged in.</div>';
+    return;
+  }
+
+  wiredMicList.innerHTML = wiredMics.map((mic, idx) => `
+    <label style="display: flex; align-items: center; gap: 10px; background: var(--panel-2); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; text-align: left; width: 100%;">
+      <input type="checkbox" name="wiredMicCheckbox" value="${mic.deviceId}" data-label="${mic.label || 'Microphone ' + (idx + 1)}" checked style="width: 18px; height: 18px; cursor: pointer;" />
+      <div style="flex: 1;">
+        <div style="font-weight:600; font-size:14.5px; color:var(--text);">🎤 ${escapeHtml(mic.label || 'Microphone ' + (idx + 1))}</div>
+        <div style="font-size:11.5px; color:var(--muted); font-family: monospace;">ID: ${mic.deviceId.substring(0, 16)}...</div>
+      </div>
+    </label>
+  `).join('');
+}
+
+document.getElementById('detectMicsBtn').onclick = refreshWiredMics;
+
+createBtn.onclick = async () => {
+  const name = sessionNameInput.value.trim() || 'Untitled Session';
+  const setupMode = document.querySelector('input[name="setupMode"]:checked').value;
+  
+  const res = await fetch('/api/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      setupMode,
+      deviceId,
+      coordinatorName: 'Local Coordinator'
+    })
+  });
+  const data = await res.json();
+  currentSession = data.code;
+  currentSessionMode = data.setupMode;
+
+  createPanel.style.display = 'none';
+  sessionPanel.style.display = 'block';
+  sessionTitle.textContent = data.name;
+  sessionCodeEl.textContent = data.code;
+
+  if (currentSessionMode === 'wired') {
+    document.getElementById('joinInfoSection').style.display = 'none';
+    document.getElementById('wiredMicPanel').style.display = 'block';
+    await initWiredMics();
+  } else {
+    document.getElementById('joinInfoSection').style.display = 'flex';
+    document.getElementById('wiredMicPanel').style.display = 'none';
+    const qrRes = await fetch(`/api/sessions/${data.code}/qr`);
+    const qrData = await qrRes.json();
+    qrImg.src = qrData.qrDataUrl;
+    joinUrl.textContent = qrData.url;
+  }
+
+  socket.emit('coordinator_join', { code: data.code });
+};
+
+countdownInput.onchange = () => {
+  const seconds = parseInt(countdownInput.value, 10) || 3;
+  countdownInput.value = Math.max(1, Math.min(30, seconds));
+  socket.emit('set_countdown_seconds', { code: currentSession, seconds: countdownInput.value });
+};
+
+startBtn.onclick = () => {
+  socket.emit('begin_start_countdown', { code: currentSession });
+};
+stopBtn.onclick = () => {
+  socket.emit('begin_stop_countdown', { code: currentSession });
+};
+newSessionBtn.onclick = () => location.reload();
+
+socket.on('session_state', (session) => {
+  renderStatus(session.status);
+  renderMics(session.participants);
+  if (session.countdownSeconds && document.activeElement !== countdownInput) {
+    countdownInput.value = session.countdownSeconds;
+  }
+});
+
+// Coordinator sees the same synchronized countdown participants see, so the room
+// (including whoever's running this dashboard) has one shared visual cue.
+socket.on('countdown_start', ({ seconds, phase }) => {
+  showCoordCountdown(seconds, phase);
+});
+socket.on('recording_go', async () => {
+  hideCoordCountdown();
+  if (currentSessionMode === 'wired') {
+    const checkedBoxes = document.querySelectorAll('input[name="wiredMicCheckbox"]:checked');
+    if (checkedBoxes.length === 0) {
+      alert('Please select at least one microphone!');
+      socket.emit('begin_stop_countdown', { code: currentSession });
+      return;
+    }
+
+    wiredStreams = [];
+    wiredRecorders = [];
+    wiredBackupChunks = {};
+
+    for (const box of checkedBoxes) {
+      const devId = box.value;
+      const label = box.dataset.label;
+      const participantId = 'w_' + Math.random().toString(36).substring(2, 10);
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: devId },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: true
+          }
+        });
+        wiredStreams.push(stream);
+
+        // Join session as participant for this mic
+        socket.emit('participant_join', {
+          code: currentSession,
+          name: label,
+          deviceInfo: { deviceId: 'wired_' + devId, label, userAgent: navigator.userAgent },
+          participantId
+        });
+
+        const liveMime = pickSupportedMime();
+        
+        // Setup live recorder
+        const liveRecorder = new MediaRecorder(stream, { mimeType: liveMime, audioBitsPerSecond: 64000 });
+        liveRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            e.data.arrayBuffer().then(buf => {
+              socket.emit('audio_chunk', { code: currentSession, participantId, chunk: buf });
+            });
+          }
+        };
+
+        // Setup backup recorder
+        wiredBackupChunks[participantId] = [];
+        const backupRecorder = new MediaRecorder(stream, { mimeType: liveMime, audioBitsPerSecond: 128000 });
+        backupRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            wiredBackupChunks[participantId].push(e.data);
+          }
+        };
+
+        // Start them both
+        liveRecorder.start(1000);
+        backupRecorder.start();
+
+        wiredRecorders.push({
+          participantId,
+          live: liveRecorder,
+          backup: backupRecorder
+        });
+      } catch (err) {
+        console.error('Error starting wired mic:', label, err);
+      }
+    }
+  }
+});
+
+socket.on('recording_stop', async () => {
+  hideCoordCountdown();
+  if (currentSessionMode === 'wired') {
+    for (const rec of wiredRecorders) {
+      if (rec.live.state !== 'inactive') rec.live.stop();
+      if (rec.backup.state !== 'inactive') {
+        rec.backup.onstop = () => {
+          uploadWiredBackup(rec.participantId);
+        };
+        rec.backup.stop();
+      }
+    }
+    for (const stream of wiredStreams) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+  }
+});
+
+async function uploadWiredBackup(participantId) {
+  const chunks = wiredBackupChunks[participantId] || [];
+  const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
+  const buf = await blob.arrayBuffer();
+  const CHUNK_SIZE = 256 * 1024;
+  let offset = 0;
+
+  if (buf.byteLength === 0) {
+    socket.emit('local_backup_chunk', { code: currentSession, participantId, chunk: null, isFinal: true });
+    return;
+  }
+
+  while (offset < buf.byteLength) {
+    const slice = buf.slice(offset, offset + CHUNK_SIZE);
+    offset += CHUNK_SIZE;
+    const isFinal = offset >= buf.byteLength;
+    socket.emit('local_backup_chunk', {
+      code: currentSession,
+      participantId,
+      chunk: slice,
+      isFinal
+    });
+    await new Promise(r => setTimeout(r, 15));
+  }
+}
+
+function pickSupportedMime() {
+  const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+  for (const o of options) {
+    if (MediaRecorder.isTypeSupported(o)) return o;
+  }
+  return '';
+}
+
+function showCoordCountdown(seconds, phase) {
+  coordCountdownOverlay.style.display = 'flex';
+  coordCountdownOverlay.className = phase === 'stopping' ? 'phase-stopping' : '';
+  coordCountdownLabel.textContent = phase === 'stopping' ? 'Wrapping up in' : 'Recording starts in';
+  coordCountdownSub.textContent = phase === 'stopping'
+    ? 'All mics will stop recording at the same instant.'
+    : 'All connected mics will start recording at the same instant.';
+
+  let remaining = seconds;
+  coordCountdownNumber.textContent = remaining;
+  if (coordCountdownTimer) clearInterval(coordCountdownTimer);
+  coordCountdownTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining > 0) {
+      coordCountdownNumber.textContent = remaining;
+    } else {
+      clearInterval(coordCountdownTimer);
+      coordCountdownTimer = null;
+    }
+  }, 1000);
+}
+
+function hideCoordCountdown() {
+  coordCountdownOverlay.style.display = 'none';
+  if (coordCountdownTimer) { clearInterval(coordCountdownTimer); coordCountdownTimer = null; }
+}
+
+function renderStatus(status) {
+  let displayStatus = 'Setup';
+  let pillClass = 'status-open';
+  
+  if (status === 'recording' || status === 'counting_in' || status === 'counting_out') {
+    displayStatus = 'Recording';
+    pillClass = 'status-recording';
+  } else if (status === 'stopped' || status === 'completed' || status === 'ended' || status === 'processing') {
+    displayStatus = 'Saved';
+    pillClass = 'status-stopped';
+  } else if (status === 'failed') {
+    displayStatus = 'Failed';
+    pillClass = 'status-failed';
+  }
+
+  statusPill.className = 'status-pill ' + pillClass;
+  const isRecording = status === 'recording' || status === 'counting_in' || status === 'counting_out';
+  statusPill.innerHTML = `<span class="dot${isRecording ? ' pulse' : ''}"></span> ${displayStatus.toUpperCase()}`;
+
+  startBtn.disabled = status !== 'open' && status !== 'configuring';
+  stopBtn.disabled = status !== 'recording';
+  countdownInput.disabled = status !== 'open' && status !== 'configuring';
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 KB';
+  const kb = bytes / 1024;
+  if (kb < 1024) return kb.toFixed(0) + ' KB';
+  return (kb / 1024).toFixed(1) + ' MB';
+}
+
+function trimStatusLabel(p) {
+  switch (p.trimStatus) {
+    case 'done':
+      return `<span class="trim-done">✅ Synced file ready</span> — <a class="download-link" href="/api/sessions/${currentSession}/download/${p.id}?file=synced" download>Download synced</a> · <a class="download-link" href="/api/sessions/${currentSession}/download/${p.id}?file=raw" download>raw backup</a>`;
+    case 'trimming':
+      return `<span class="trim-trimming">⏳ Trimming/syncing…</span>`;
+    case 'error':
+      return `<span class="trim-error">⚠️ Sync failed${p.trimError ? ': ' + escapeHtml(p.trimError) : ''}</span>${p.uploadedLocalFile ? ` — <a class="download-link" href="/api/sessions/${currentSession}/download/${p.id}?file=raw" download>download raw backup</a>` : ''}`;
+    default:
+      return p.uploadedLocalFile
+        ? `<span class="trim-pending">Backup uploaded, waiting to sync…</span>`
+        : `<span class="trim-pending">Will sync after session ends</span>`;
+  }
+}
+
+function renderMics(participants) {
+  if (!participants.length) {
+    micList.innerHTML = '<div class="empty-state">No participants connected yet — share the link above.</div>';
+    return;
+  }
+  micList.innerHTML = participants.map(p => {
+    const lastSeen = p.lastChunkAt ? Math.round((Date.now() - p.lastChunkAt) / 1000) + 's ago' : 'no audio yet';
+    return `
+      <div class="mic-card">
+        <div>
+          <div class="mic-name">🎤 ${escapeHtml(p.name)}</div>
+          <div class="mic-meta">${formatBytes(p.bytesReceived)} streamed live · last chunk ${lastSeen}</div>
+          <div class="mic-meta">${trimStatusLabel(p)}</div>
+        </div>
+        <div class="mic-status ${p.connected ? 'connected' : 'disconnected'}">
+          <span class="dot"></span> ${p.connected ? 'Connected' : 'Disconnected'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// CLI Tool Invocation Panel Logic
+const runCliBtn = document.getElementById('runCliBtn');
+const cliLogOutput = document.getElementById('cliLogOutput');
+const cliStatusBadge = document.getElementById('cliStatusBadge');
+const cliLogContainer = document.getElementById('cliLogContainer');
+
+runCliBtn.onclick = async () => {
+  const path = document.getElementById('cliPathInput').value.trim();
+  const village = document.getElementById('cliVillageInput').value.trim();
+  const district = document.getElementById('cliDistrictInput').value.trim();
+  const block = document.getElementById('cliBlockInput').value.trim();
+  const coordinator = document.getElementById('cliCoordinatorInput').value.trim();
+  const language = document.getElementById('cliLanguageSelect').value;
+  const model = document.getElementById('cliModelSelect').value;
+
+  if (!path) {
+    alert('Please enter a file or folder path.');
+    return;
+  }
+
+  runCliBtn.disabled = true;
+  cliLogContainer.style.display = 'block';
+  cliLogOutput.textContent = 'Triggering CLI pipeline in backend...\n';
+  
+  cliStatusBadge.textContent = 'RUNNING';
+  cliStatusBadge.style.background = 'rgba(255,182,72,0.15)';
+  cliStatusBadge.style.color = 'var(--warn)';
+
+  try {
+    const res = await fetch('/api/cli/invoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        village,
+        district,
+        block,
+        coordinator,
+        language,
+        model
+      })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Server error invoking CLI');
+    }
+
+    cliLogOutput.textContent += `Session created with code: ${data.sessionCode}\n`;
+    socket.emit('join_cli_logs', { sessionCode: data.sessionCode });
+  } catch (err) {
+    cliLogOutput.textContent += `❌ Error: ${err.message}\n`;
+    cliStatusBadge.textContent = 'FAILED';
+    cliStatusBadge.style.background = 'rgba(255,107,107,0.15)';
+    cliStatusBadge.style.color = 'var(--accent-2)';
+    runCliBtn.disabled = false;
+  }
+};
+
+socket.on('cli_log', ({ message }) => {
+  cliLogOutput.textContent += message;
+  cliLogOutput.scrollTop = cliLogOutput.scrollHeight;
+});
+
+socket.on('cli_finished', ({ status }) => {
+  cliStatusBadge.textContent = status === 'completed' ? 'SAVED' : 'FAILED';
+  cliStatusBadge.style.background = status === 'completed' ? 'rgba(61,220,151,0.15)' : 'rgba(255,107,107,0.15)';
+  cliStatusBadge.style.color = status === 'completed' ? 'var(--good)' : 'var(--accent-2)';
+  runCliBtn.disabled = false;
+});
+</script>
+</body>
+</html>

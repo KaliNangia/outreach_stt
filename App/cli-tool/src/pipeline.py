@@ -7,20 +7,20 @@ import shutil
 from pathlib import Path
 
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 from config import settings
 from src.core.utils import log, FileValidator, MetadataValidator
 from src.core.database import db_manager, file_manager, InteractionMetadata, InteractionRecord, ProcessingStatus
-from src.modules.processing import audio_extractor, transcription_service, translation_service
+from src.modules.processing import audio_extractor, audio_preprocessing, transcription_service, translation_service
 from src.modules.analysis import llm_analyzer, participant_parser
 from src.modules.reports import excel_generator, pdf_generator, word_generator
 
 class PipelineOrchestrator:
     """Orchestrate the complete report generation pipeline"""
     
-    async def process_interaction(self, file_path: Path, metadata: Dict[str, Any]) -> str:
-        log.info(f"Starting pipeline for: {file_path.name}")
+    async def process_interaction(self, file_path: Path, metadata: Dict[str, Any], model: str = "efficient") -> str:
+        log.info(f"Starting pipeline for: {file_path.name} using model: {model}")
         try:
             # 1. Validate
             valid, msg = FileValidator.validate_file(file_path, settings.max_upload_size_mb)
@@ -32,11 +32,14 @@ class PipelineOrchestrator:
             # 3. Audio Extraction
             audio_path = await self._extract_audio(file_path, interaction_id)
             
+            # 3.5. Audio Preprocessing (Noise suppression & Diarization)
+            preprocessed_audio_path, segments = await self._preprocess_audio(audio_path, interaction_id)
+            
             # 4. Transcription
-            t_data = await self._transcribe(audio_path, metadata.get('language'), interaction_id)
+            t_data = await self._transcribe(preprocessed_audio_path, metadata.get('language'), interaction_id, segments, model)
             
             # 5. Translation
-            translation = await self._translate(t_data['text'], t_data['language'], interaction_id)
+            translation = await self._translate(t_data['segments'], t_data['text'], t_data['language'], interaction_id)
             
             # 6. Analysis
             analysis = await self._analyze(translation, metadata, interaction_id)
@@ -104,18 +107,94 @@ class PipelineOrchestrator:
             await db_manager.update_interaction(iid, {'audio_path': str(file_path), 'status.audio_extracted': True})
             return file_path
 
-    async def _transcribe(self, audio_path: Path, lang: Optional[str], iid: str) -> Dict[str, Any]:
-        log.info("Transcribing")
-        data = await transcription_service.transcribe(audio_path, lang)
+    async def _preprocess_audio(self, audio_path: Path, interaction_id: str) -> tuple[Path, Optional[List[Dict[str, Any]]]]:
+        """Run noise suppression and speaker diarization"""
+        log.info("Running audio preprocessing")
+        import asyncio
+        
+        # 1. Noise Suppression
+        try:
+            cleaned_audio_filename = f"{interaction_id}_cleaned.wav"
+            cleaned_audio_path = audio_path.parent / cleaned_audio_filename
+            
+            # Run noise suppression in a thread pool since it is CPU intensive and synchronous
+            loop = asyncio.get_running_loop()
+            cleaned_audio_path = await loop.run_in_executor(
+                None, 
+                audio_preprocessing.noise_suppression, 
+                audio_path, 
+                cleaned_audio_path
+            )
+            
+            # Save processed file using file_manager
+            saved_cleaned_audio = await file_manager.save_processed_file(cleaned_audio_path, cleaned_audio_filename, "audio")
+            
+            # Clean up temporary cleaned audio if it's different from the saved one
+            if cleaned_audio_path.exists() and cleaned_audio_path != saved_cleaned_audio:
+                try:
+                    cleaned_audio_path.unlink()
+                except Exception as e:
+                    log.warning(f"Failed to delete intermediate cleaned audio: {e}")
+                    
+            audio_path = saved_cleaned_audio
+            log.info(f"Noise suppression completed: {audio_path}")
+        except Exception as e:
+            log.error(f"Noise suppression failed, using original audio: {e}")
+            
+        # 2. Speaker Diarization
+        segments = None
+        try:
+            diarization_json_filename = f"{interaction_id}_timeline.json"
+            diarization_json_path = settings.processed_dir / "diarization" / diarization_json_filename
+            diarization_json_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Run diarization
+            segments = await audio_preprocessing.diarize(
+                audio_path=audio_path,
+                output_json_path=diarization_json_path
+            )
+            
+            # Update database status
+            await db_manager.update_interaction(interaction_id, {
+                'diarization_timeline_path': str(diarization_json_path),
+                'status.diarized': True
+            })
+        except Exception as e:
+            log.error(f"Speaker diarization failed: {e}")
+            # If diarization fails, we proceed without segments (fallback to whole file transcription)
+            
+        return audio_path, segments
+
+    async def _transcribe(self, audio_path: Path, lang: Optional[str], iid: str, segments: Optional[List[Dict[str, Any]]] = None, model: str = "efficient") -> Dict[str, Any]:
+        log.info(f"Transcribing using model: {model}")
+        data = await transcription_service.transcribe(audio_path, lang, segments, model)
         await db_manager.update_interaction(iid, {'transcript': data['text'], 'transcript_language': data['language'], 'status.transcribed': True})
         return data
 
-    async def _translate(self, text: str, src_lang: str, iid: str) -> str:
-        if src_lang.lower() in ['en', 'english']: return text
+    async def _translate(self, segments: Optional[List[Dict[str, Any]]], raw_text: str, src_lang: str, iid: str) -> str:
+        if src_lang.lower() in ['en', 'english']: return raw_text
         log.info(f"Translating {src_lang} -> English")
         lang_map = {'pa': 'punjabi', 'hi': 'hindi', 'en': 'english'} # Add full map if needed
         full_lang = lang_map.get(src_lang, src_lang)
-        translation = await translation_service.translate(text, full_lang)
+        
+        # If segments exist, translate segment-by-segment to preserve timestamps/speakers
+        # and prevent model length truncation issues
+        if segments:
+            log.info("Translating segment-by-segment")
+            translated_lines = []
+            for entry in segments:
+                text_to_translate = entry.get('text', '')
+                if text_to_translate.strip():
+                    translated_text = await translation_service.translate(text_to_translate, full_lang)
+                else:
+                    translated_text = ""
+                time_str = entry.get('time', '')
+                speaker = entry.get('speaker', '')
+                translated_lines.append(f"{time_str} {speaker}: {translated_text}")
+            translation = "\n".join(translated_lines).strip()
+        else:
+            translation = await translation_service.translate(raw_text, full_lang)
+            
         await db_manager.update_interaction(iid, {'translation': translation, 'status.translated': True})
         return translation
 

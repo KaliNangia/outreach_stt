@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mic Recorder — Join Session</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --panel-2: #1f2330;
+    --border: #2a2e3a;
+    --text: #e7e9ee;
+    --muted: #8d93a3;
+    --accent: #5b8cff;
+    --accent-2: #ff6b6b;
+    --good: #3ddc97;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%;
+    max-width: 420px;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13.5px; margin-bottom: 24px; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; margin-top: 16px; }
+  input[type=text], select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 22px;
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.danger { background: var(--accent-2); }
+
+  #liveScreen { display: none; text-align: center; }
+  .big-status { font-size: 17px; font-weight: 600; margin: 10px 0 4px; }
+  .mic-icon { font-size: 48px; margin: 10px 0; }
+  .level-bar-bg {
+    width: 100%; height: 10px; background: var(--panel-2);
+    border-radius: 6px; overflow: hidden; margin: 18px 0 6px;
+  }
+  .level-bar-fill {
+    height: 100%; width: 0%; background: var(--good);
+    transition: width 0.08s ease-out;
+  }
+  .status-line { color: var(--muted); font-size: 13px; margin-top: 16px; }
+  .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; margin-top: 8px;
+  }
+  .badge-waiting { background: rgba(141,147,163,0.15); color: var(--muted); }
+  .badge-recording { background: rgba(255,107,107,0.15); color: var(--accent-2); }
+  .badge-stopped { background: rgba(61,220,151,0.15); color: var(--good); }
+  .error { color: var(--accent-2); font-size: 13.5px; margin-top: 14px; }
+
+  #countdownOverlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15,17,23,0.97);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  #countdownOverlay.phase-stopping .countdown-number { color: var(--accent-2); }
+  .countdown-label {
+    font-size: 16px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .countdown-number {
+    font-size: 110px;
+    font-weight: 700;
+    color: var(--good);
+    line-height: 1;
+    animation: countdownPop 0.5s ease-out;
+  }
+  @keyframes countdownPop {
+    0% { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .countdown-sub { color: var(--muted); font-size: 14px; margin-top: 14px; max-width: 280px; }
+</style>
+</head>
+<body>
+
+<div class="card" id="setupScreen">
+  <h1>🎤 Join Recording Session</h1>
+  <div class="sub" id="sessionLabel">Loading session…</div>
+
+  <label for="nameInput">Your name</label>
+  <input type="text" id="nameInput" placeholder="e.g. Riya" />
+
+  <label for="deviceSelect">Microphone</label>
+  <select id="deviceSelect"></select>
+  <div class="sub" style="margin-top:6px;">
+    Pair your Bluetooth mic to this device first (in your phone/laptop's Bluetooth settings) — it will then appear in this list.
+  </div>
+
+  <button id="joinBtn">Join &amp; Start Streaming</button>
+  <div class="error" id="errorMsg"></div>
+</div>
+
+<div class="card" id="liveScreen">
+  <div class="mic-icon">🎙️</div>
+  <div class="big-status" id="liveName"></div>
+  <div class="status-line" id="deviceLine"></div>
+  <span class="badge badge-waiting" id="statusBadge">Connected — waiting for host to start</span>
+  <div class="level-bar-bg"><div class="level-bar-fill" id="levelBar"></div></div>
+  <div class="status-line" id="dataLine">0 KB streamed</div>
+  <div class="status-line" id="backupLine"></div>
+</div>
+
+<div id="countdownOverlay">
+  <div class="countdown-label" id="countdownLabel">Recording starts in</div>
+  <div class="countdown-number" id="countdownNumber">3</div>
+  <div class="countdown-sub" id="countdownSub">Stay quiet until the discussion officially begins.</div>
+</div>
+
+<script>
+const sessionCode = location.pathname.split('/').pop();
+const socket = io();
+
+const setupScreen = document.getElementById('setupScreen');
+const liveScreen = document.getElementById('liveScreen');
+const sessionLabel = document.getElementById('sessionLabel');
+const nameInput = document.getElementById('nameInput');
+const deviceSelect = document.getElementById('deviceSelect');
+const joinBtn = document.getElementById('joinBtn');
+const errorMsg = document.getElementById('errorMsg');
+const liveName = document.getElementById('liveName');
+const deviceLine = document.getElementById('deviceLine');
+const statusBadge = document.getElementById('statusBadge');
+const levelBar = document.getElementById('levelBar');
+const dataLine = document.getElementById('dataLine');
+const backupLine = document.getElementById('backupLine');
+const countdownOverlay = document.getElementById('countdownOverlay');
+const countdownLabel = document.getElementById('countdownLabel');
+const countdownNumber = document.getElementById('countdownNumber');
+const countdownSub = document.getElementById('countdownSub');
+
+let participantId = null;
+let mediaStream = null;
+let liveRecorder = null;
+let backupRecorder = null;
+let backupChunks = [];
+let totalBytesSent = 0;
+let audioCtx, analyser, levelRAF;
+let countdownTimer = null;
+let currentSessionStatus = 'open';
+
+// 1. Check session exists
+fetch(`/api/sessions/${sessionCode}`)
+  .then(r => {
+    if (!r.ok) throw new Error('not found');
+    return r.json();
+  })
+  .then(s => {
+    sessionLabel.textContent = `Joining: ${s.name}`;
+  })
+  .catch(() => {
+    sessionLabel.textContent = 'Session not found. Check the link with your coordinator.';
+    joinBtn.disabled = true;
+  });
+
+// 2. Request mic permission early so device list is populated with labels
+async function populateDevices() {
+  try {
+    // Need a permission grant before device labels are visible in most browsers
+    const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tempStream.getTracks().forEach(t => t.stop());
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    deviceSelect.innerHTML = mics.map(d =>
+      `<option value="${d.deviceId}">${d.label || 'Microphone'}</option>`
+    ).join('');
+
+    if (!mics.length) {
+      errorMsg.textContent = 'No microphones found on this device.';
+    }
+  } catch (err) {
+    errorMsg.textContent = 'Microphone permission denied. Please allow mic access and reload.';
+  }
+}
+populateDevices();
+
+// Re-scan if a Bluetooth mic gets paired/connected after page load
+navigator.mediaDevices.addEventListener('devicechange', populateDevices);
+
+joinBtn.onclick = async () => {
+  const name = nameInput.value.trim();
+  if (!name) { errorMsg.textContent = 'Please enter your name.'; return; }
+  const deviceId = deviceSelect.value;
+  if (!deviceId) { errorMsg.textContent = 'Please select a microphone.'; return; }
+
+  errorMsg.textContent = '';
+  joinBtn.disabled = true;
+  joinBtn.textContent = 'Connecting…';
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: { exact: deviceId },
+        echoCancellation: true,
+        noiseSuppression: false, // keep raw-ish for later processing; flip true if you prefer cleaner live monitoring
+        autoGainControl: true
+      }
+    });
+  } catch (err) {
+    errorMsg.textContent = 'Could not access selected microphone: ' + err.message;
+    joinBtn.disabled = false;
+    joinBtn.textContent = 'Join & Start Streaming';
+    return;
+  }
+
+  const selectedLabel = deviceSelect.options[deviceSelect.selectedIndex].text;
+
+  socket.emit('participant_join', {
+    code: sessionCode,
+    name,
+    deviceInfo: { label: selectedLabel, userAgent: navigator.userAgent }
+  });
+
+  socket.once('joined', (data) => {
+    participantId = data.participantId;
+    setupScreen.style.display = 'none';
+    liveScreen.style.display = 'block';
+    liveName.textContent = name;
+    deviceLine.textContent = '🎧 ' + selectedLabel;
+    currentSessionStatus = data.status;
+    prepareRecorders();   // get MediaRecorder instances ready, but don't start them yet
+    startLevelMeter();
+    setBadge(data.status);
+  });
+
+  socket.once('error_message', (e) => {
+    errorMsg.textContent = e.message;
+    joinBtn.disabled = false;
+    joinBtn.textContent = 'Join & Start Streaming';
+  });
+};
+
+// --- Synchronized start: server tells everyone to count down together, then go ---
+socket.on('countdown_start', ({ seconds, phase }) => {
+  currentSessionStatus = phase === 'starting' ? 'counting_in' : 'counting_out';
+  showCountdown(seconds, phase);
+});
+
+socket.on('recording_go', () => {
+  hideCountdown();
+  currentSessionStatus = 'recording';
+  setBadge('recording');
+  if (liveRecorder && liveRecorder.state === 'inactive') liveRecorder.start(1000);
+  if (backupRecorder && backupRecorder.state === 'inactive') backupRecorder.start();
+});
+
+socket.on('recording_stop', () => {
+  hideCountdown();
+  currentSessionStatus = 'stopped';
+  setBadge('stopped');
+  finalizeAndUploadBackup();
+});
+
+function showCountdown(seconds, phase) {
+  countdownOverlay.style.display = 'flex';
+  countdownOverlay.className = phase === 'stopping' ? 'phase-stopping' : '';
+  countdownLabel.textContent = phase === 'stopping' ? 'Wrapping up in' : 'Recording starts in';
+  countdownSub.textContent = phase === 'stopping'
+    ? 'Finish your sentence — recording will stop automatically.'
+    : 'Stay quiet until the discussion officially begins.';
+
+  let remaining = seconds;
+  countdownNumber.textContent = remaining;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining > 0) {
+      countdownNumber.textContent = remaining;
+      // retrigger pop animation
+      countdownNumber.style.animation = 'none';
+      requestAnimationFrame(() => { countdownNumber.style.animation = ''; });
+    } else {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }, 1000);
+}
+
+function hideCountdown() {
+  countdownOverlay.style.display = 'none';
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+}
+
+function setBadge(status) {
+  statusBadge.className = 'badge badge-' + (status === 'recording' ? 'recording' : status === 'stopped' ? 'stopped' : 'waiting');
+  statusBadge.textContent = status === 'recording'
+    ? '● Recording'
+    : status === 'stopped'
+      ? 'Session stopped — uploading backup…'
+      : status === 'counting_in'
+        ? 'Get ready…'
+        : status === 'counting_out'
+          ? 'Wrapping up…'
+          : 'Connected — waiting for host to start';
+}
+
+function prepareRecorders() {
+  // Created here (right after permission grant) but NOT started — actual start() is
+  // called only when the synchronized 'recording_go' event arrives from the server,
+  // so every participant's recording begins at the same real-world instant.
+  const liveMime = pickSupportedMime();
+
+  liveRecorder = new MediaRecorder(mediaStream, { mimeType: liveMime, audioBitsPerSecond: 64000 });
+  liveRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) {
+      e.data.arrayBuffer().then(buf => {
+        socket.emit('audio_chunk', { code: sessionCode, participantId, chunk: buf });
+        totalBytesSent += buf.byteLength;
+        dataLine.textContent = formatBytes(totalBytesSent) + ' streamed';
+      });
+    }
+  };
+
+  backupChunks = [];
+  backupRecorder = new MediaRecorder(mediaStream, { mimeType: liveMime, audioBitsPerSecond: 128000 });
+  backupRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) backupChunks.push(e.data);
+  };
+
+  window.addEventListener('beforeunload', () => {
+    // best-effort: try to flush backup if user closes tab mid-session
+    if (backupRecorder && backupRecorder.state !== 'inactive') backupRecorder.stop();
+  });
+}
+
+function startLevelMeter() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+  const data = new Uint8Array(analyser.frequencyBinCount);
+
+  function drawLevel() {
+    analyser.getByteFrequencyData(data);
+    const avg = data.reduce((a, b) => a + b, 0) / data.length;
+    const pct = Math.min(100, (avg / 100) * 100);
+    levelBar.style.width = pct + '%';
+    levelRAF = requestAnimationFrame(drawLevel);
+  }
+  drawLevel();
+}
+
+function pickSupportedMime() {
+  const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+  for (const o of options) {
+    if (MediaRecorder.isTypeSupported(o)) return o;
+  }
+  return ''; // let browser pick default
+}
+
+function finalizeAndUploadBackup() {
+  if (liveRecorder && liveRecorder.state !== 'inactive') liveRecorder.stop();
+  if (levelRAF) cancelAnimationFrame(levelRAF);
+
+  if (!backupRecorder || backupRecorder.state === 'inactive') {
+    uploadBackupBlob();
+    return;
+  }
+  backupRecorder.onstop = uploadBackupBlob;
+  backupRecorder.stop();
+}
+
+async function uploadBackupBlob() {
+  const blob = new Blob(backupChunks, { type: backupChunks[0]?.type || 'audio/webm' });
+  const buf = await blob.arrayBuffer();
+  const CHUNK_SIZE = 256 * 1024;
+  let offset = 0;
+  backupLine.textContent = 'Uploading high-quality backup…';
+
+  if (buf.byteLength === 0) {
+    // Nothing was recorded (e.g. joined after the session had already ended) — still
+    // signal completion so the server doesn't wait forever for a backup that won't arrive.
+    socket.emit('local_backup_chunk', { code: sessionCode, participantId, chunk: null, isFinal: true });
+    backupLine.textContent = 'No audio was recorded on this device for this session.';
+    return;
+  }
+
+  while (offset < buf.byteLength) {
+    const slice = buf.slice(offset, offset + CHUNK_SIZE);
+    offset += CHUNK_SIZE;
+    const isFinal = offset >= buf.byteLength;
+    socket.emit('local_backup_chunk', {
+      code: sessionCode,
+      participantId,
+      chunk: slice,
+      isFinal
+    });
+    // tiny pause so we don't blast the socket buffer
+    await new Promise(r => setTimeout(r, 15));
+  }
+  backupLine.textContent = '✅ Backup uploaded — you can close this page.';
+}
+
+function formatBytes(bytes) {
+  const kb = bytes / 1024;
+  if (kb < 1024) return kb.toFixed(0) + ' KB';
+  return (kb / 1024).toFixed(1) + ' MB';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+Error executing qwen/qwen-3-8b-instruct: Error code: 400 - {'error': {'message': 'qwen/qwen-3-8b-instruct is not a valid model ID', 'code': 400}, 'user_id': 'user_3GCn8lb7ZyOtiS9sAHvVl6ZYseR'}

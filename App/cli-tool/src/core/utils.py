@@ -38,7 +38,7 @@ class ValidationError(Exception): pass
 class FileValidator:
     """Validate uploaded files"""
     AUDIO_FORMATS = {'audio/mpeg': ['.mp3'], 'audio/wav': ['.wav'], 'audio/x-wav': ['.wav'], 'audio/ogg': ['.ogg'], 'audio/flac': ['.flac'], 'audio/aac': ['.aac'], 'audio/m4a': ['.m4a', '.mp4'], 'audio/x-m4a': ['.m4a']} # Added .mp4 to m4a as commonly mislabeled
-    VIDEO_FORMATS = {'video/mp4': ['.mp4'], 'video/mpeg': ['.mpeg', '.mpg'], 'video/quicktime': ['.mov'], 'video/x-msvideo': ['.avi'], 'video/x-matroska': ['.mkv'], 'video/webm': ['.webm']}
+    VIDEO_FORMATS = {'video/mp4': ['.mp4','.m4a'], 'video/mpeg': ['.mpeg', '.mpg'], 'video/quicktime': ['.mov'], 'video/x-msvideo': ['.avi'], 'video/x-matroska': ['.mkv'], 'video/webm': ['.webm']}
     
     @classmethod
     def get_mime_type(cls, file_path: Path) -> str:
